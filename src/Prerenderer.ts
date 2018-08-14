@@ -19,6 +19,8 @@ export class Prerenderer {
 
   // chrome browser instance
   private chromeInstance: puppeteer.Browser;
+  // default render host
+  private pHost = 'http://localhost:1337';
 
   /**
    * Initializes chrome in the background for headless rendering
@@ -65,11 +67,12 @@ export class Prerenderer {
       });
       // go to the url
       await page.goto(url, { waitUntil: 'networkidle0'});
+      // search for internal links on the page
+      renderResult.links = await this.searchLinks(page); 
       // get the html page content
       let htmlresult = await page.content();
       debug('Got page content for ' + url);
       // close the tab in the browser
-      await page.close();
       // if(htmlresult && htmlresult.length > 0) {
       //   // optimize the html
       //   // @todo improve settings
@@ -81,7 +84,7 @@ export class Prerenderer {
       if(htmlresult && htmlresult.length > 0 ) {
         const $ = cheerio.load(htmlresult);
         // read all links in the content and add them to the renderResult links attribute
-        renderResult.links = this.readLinks($);
+        // renderResult.links = this.readLinks($);
         // write the server side rendering information to describe parents and children
         renderResult.html = this.writeSsrInfo($);
       }
@@ -89,9 +92,30 @@ export class Prerenderer {
     } catch (err) {
       debug('Error: ' + err.message);
       // push the erors to the renderResult
-      renderResult.errors.push(err);
+      renderResult.errors.push(err.message);
     }
     return renderResult;
+  }
+
+  public async searchLinks(page: puppeteer.Page) {
+    // everything in evaluate runs in the context of the browser
+    const anchorRes = await page.evaluate((pHost) => {
+      // creates a new set to ensure that the links are unique
+      const linkSet = new Set();
+      // find the links and convert to an Array
+      const links = Array.from(document.querySelectorAll('a'));
+      // run the map function on the link array
+      links.map(link => {
+        // check if it's a local link
+        if(link.href && link.href.startsWith(pHost)) {
+          // add the link to the set
+          linkSet.add(link.href.replace(pHost,''));
+        }
+      });
+      // return an array as a Set could not be returned from the browser context
+      return Array.from(linkSet);
+    }, this.pHost);
+    return anchorRes;
   }
 
   /**
@@ -101,30 +125,6 @@ export class Prerenderer {
    */
   public optimizeHtml(html: string, options: any = { minifyCSS: true }) {
     return minify(html, options);
-  }
-
-  /**
-   * Reads the internal links from the html content
-   * @param $ {any} the virtual dom provided by cheerio
-   * @param internal {boolean} only internal links
-   */
-  public readLinks($: any, internal: boolean = true) {
-    // creates a new set to ensure that the links are unique
-    const anchorRes = new Set();
-    // map the anchors
-    $('a').map((index, anchor) => {
-      // check if the anchors have a href attribute
-      if(anchor && anchor.attribs && anchor.attribs.href) {
-        // only return internal links
-        if(anchor.attribs.href.startsWith('/')) {
-          // add the anchors to the set
-          anchorRes.add(anchor.attribs.href);
-        }
-      }
-      return;
-    });
-    // create a array from the set
-    return Array.from(anchorRes);
   }
 
   /**
