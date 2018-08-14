@@ -1,0 +1,21 @@
+{
+  "compileOnSave": true,
+  "compilerOptions": {
+    "target": "es6",
+    "module": "commonjs",
+    "declaration": true,
+    "removeComments": true,
+    "preserveConstEnums": true,
+    "sourceMap": true,
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    "outDir": "dist/"
+  },
+  "include": [
+      "src/**/*"
+  ],
+  "exclude": [
+      "node_modules",
+      "**/*.spec.ts"
+  ]
+}

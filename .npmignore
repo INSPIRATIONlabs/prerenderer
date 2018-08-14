@@ -1,0 +1,11 @@
+node_modules
+src
+test
+output
+out
+www
+.vscode
+jes.config.js
+tsconfig.json
+.editorconfig
+.gitignore
