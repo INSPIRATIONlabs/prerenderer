@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import { PrerenderManager, PrerenderManagerOptions } from './PrerenderManager';
+
 const options: PrerenderManagerOptions = {};
 const [,, ...args] = process.argv;
 if(args[0]) {

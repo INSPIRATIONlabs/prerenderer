@@ -3,6 +3,7 @@ import * as express from 'express';
 import * as path from 'path';
 import * as dbg from 'debug';
 import * as queue from 'queue';
+import * as fs from 'fs-extra';
 
 const debug = dbg('Prerenderer');
 
@@ -100,6 +101,12 @@ export class PrerenderManager {
     this.startServer();
     // listen function for the express server
     this.app.listen(this.port, async () => {
+      try {
+        await fs.remove(this.outputDir);
+        await fs.ensureDir(this.outputDir);
+      } catch(e) {
+        console.log('Error while creating output directory ' + e.message);
+      }
       // initial get of / to get the first url's
       await this.getPage(this.startUrl);
       // start the queue
@@ -110,6 +117,17 @@ export class PrerenderManager {
         console.log('all done');
       } catch(e) {
         console.log('queue ended with error: ' + e.message);
+      }
+      try {
+        console.log('copying build and assets');
+        const fileList = await fs.readdir(this.sourceWebDir);
+        for(const fsel of fileList) {
+          if(fsel !== 'index.html') {
+            await fs.copy(this.sourceWebDir + '/' + fsel, this.outputDir + '/' + fsel);
+          }
+        }
+      } catch(e) {
+        console.log('error while copying files ' + e.message);
       }
       // console output
       console.log('Pages rendered: ' + this.renderedPages);
