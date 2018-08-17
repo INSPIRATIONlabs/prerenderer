@@ -44,6 +44,7 @@ export class Prerenderer {
     const renderResult = new PrerenderResult();
     // set the url to the result
     renderResult.url = url;
+    let page: puppeteer.Page;
     try {
       // check if chrome is already available
       if(!this.chromeInstance) {
@@ -53,7 +54,7 @@ export class Prerenderer {
         debug('Chrome started');
       }
       // create a new tab
-      const page: puppeteer.Page = await this.chromeInstance.newPage();
+      page = await this.chromeInstance.newPage();
       debug('Go to '+ url);
       // get browser errors (if they occur)
       page.on('error', err=> {
@@ -68,7 +69,7 @@ export class Prerenderer {
       // go to the url
       await page.goto(url, { waitUntil: 'networkidle0'});
       // search for internal links on the page
-      renderResult.links = await this.searchLinks(page); 
+      renderResult.links = await this.searchLinks(page);
       // get the html page content
       let htmlresult = await page.content();
       debug('Got page content for ' + url);
@@ -93,6 +94,11 @@ export class Prerenderer {
       debug('Error: ' + err.message);
       // push the erors to the renderResult
       renderResult.errors.push(err.message);
+    } finally {
+      if(page && !page.isClosed()) {
+        // ensure that the page has been closed
+        page.close();
+      }
     }
     return renderResult;
   }
