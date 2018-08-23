@@ -107,6 +107,17 @@ export class PrerenderManager {
       } catch(e) {
         console.log('Error while creating output directory ' + e.message);
       }
+      try {
+        console.log('copying build and assets');
+        const fileList = await fs.readdir(this.sourceWebDir);
+        for(const fsel of fileList) {
+          if(fsel !== 'index.html') {
+            await fs.copy(this.sourceWebDir + '/' + fsel, this.outputDir + '/' + fsel);
+          }
+        }
+      } catch(e) {
+        console.log('error while copying files ' + e.message);
+      }
       // initial get of / to get the first url's
       await this.getPage(this.startUrl);
       // start the queue
