@@ -15,6 +15,11 @@ const writeFile = util.promisify(fs.writeFile);
 // promisified version of timeout
 const timeout = ms => new Promise(res => setTimeout(res, ms))
 
+declare global {
+  interface Window {
+    isServer: boolean;
+  }
+}
 export class Prerenderer {
 
   // chrome browser instance
@@ -55,6 +60,8 @@ export class Prerenderer {
       }
       // create a new tab
       page = await this.chromeInstance.newPage();
+      // set the environment variable
+      await this.windowSet(page, 'isServer', true);
       debug('Go to '+ url);
       // get browser errors (if they occur)
       page.on('error', err=> {
@@ -103,6 +110,28 @@ export class Prerenderer {
     return renderResult;
   }
 
+  /**
+   * Set a variable before the page has been evaluated
+   * @param page The puppeterr page object
+   * @param name The variable name on window
+   * @param value The value of the variable
+   */
+  public async windowSet(page: puppeteer.Page, name, value) {
+    // sets the variable on the new document
+    await page.evaluateOnNewDocument(`
+      Object.defineProperty(window, '${name}', {
+        get() {
+          return '${value}'
+        }
+      })
+    `)
+    return;
+  };
+
+  /**
+   * Search for all anchors on the page
+   * @param page The puppeteer page object
+   */
   public async searchLinks(page: puppeteer.Page) {
     // everything in evaluate runs in the context of the browser
     const anchorRes = await page.evaluate((pHost) => {
