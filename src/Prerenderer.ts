@@ -173,12 +173,15 @@ export class Prerenderer {
       // get the ssrv of the closest hydrated parent or the own ssrv
       const parentId = ($(this).parent().closest('.hydrated').attr('ssrv')
         || $(this).closest('.hydrated').attr('ssrv'));
-      // get the index of the current child in its parent's list of children
-      const childIdx = $(this).parent().children().index($(this));
-      // assign ssrc based on parentId, index of current child and the appended nesting signifier
-      // (if there are no nested components, ssrc ends with a '.')
-      $(this).attr('ssrc', [parentId, childIdx].join('.')
-        + (hasChildNodes($(this).children().toArray()) ? '' : '.'));
+      // make sure there a parentId exists
+      if (parentId) {
+        // get the index of the current child in its parent's list of children
+        const childIdx = $(this).parent().children().index($(this));
+        // assign ssrc based on parentId, index of current child and the appended nesting signifier
+        // (if there are no nested components, ssrc ends with a '.')
+        $(this).attr('ssrc', [parentId, childIdx].join('.')
+          + (hasChildNodes($(this).children().toArray()) ? '' : '.'));
+      }
     });
     // set the date as base ssr
     $('html').attr('ssr', new Date().toISOString());
