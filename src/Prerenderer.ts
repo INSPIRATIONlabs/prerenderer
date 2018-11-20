@@ -30,11 +30,11 @@ export class Prerenderer {
   /**
    * Initializes chrome in the background for headless rendering
    */
-  private async startBrowser() {
+  public async startBrowser() {
     const browser = await puppeteer.launch({
       args: ['--no-sandbox', '--disable-setuid-sandbox'],
       headless: true,
-      slowMo: 100 // slow down by 100ms
+      // slowMo: 100 // slow down by 100ms
     });
     return browser;
   }
@@ -44,24 +44,28 @@ export class Prerenderer {
    * @param url {string} url to render
    * @param port {number} port for debugging connection
    */
-  public async runRender(url: string) {
+  public async runRender(url: string, queue?: any) {
     // create a instance for the resultset
     const renderResult = new PrerenderResult();
     // set the url to the result
     renderResult.url = url;
     let page: puppeteer.Page;
     try {
-      // check if chrome is already available
-      if(!this.chromeInstance) {
-        debug('Init chrome instance');
-        // start the browser
-        this.chromeInstance = await this.startBrowser();
-        debug('Chrome started');
+      if (!queue) {
+        // check if chrome is already available
+        if(!this.chromeInstance) {
+          debug('Init chrome instance');
+          // start the browser
+          this.chromeInstance = await this.startBrowser();
+          debug('Chrome started');
+        }
+        // create a new tab
+        page = await this.chromeInstance.newPage();
+        // set the environment variable
+        await this.windowSet(page, 'isServer', true);
+      } else {
+        page = queue.pop();
       }
-      // create a new tab
-      page = await this.chromeInstance.newPage();
-      // set the environment variable
-      await this.windowSet(page, 'isServer', true);
       debug('Go to '+ url);
       // get browser errors (if they occur)
       page.on('error', err=> {
@@ -75,8 +79,8 @@ export class Prerenderer {
       });
       // go to the url
       await page.goto(url, { waitUntil: 'networkidle0'});
-      // search for internal links on the page
-      renderResult.links = await this.searchLinks(page);
+      // // search for internal links on the page
+      // renderResult.links = await this.searchLinks(page);
       // get the html page content
       let htmlresult = await page.content();
       debug('Got page content for ' + url);
@@ -104,7 +108,11 @@ export class Prerenderer {
     } finally {
       if(page && !page.isClosed()) {
         // ensure that the page has been closed
-        page.close();
+        if (!queue) {
+          page.close();
+        } else {
+          queue.push(page);
+        }
       }
     }
     return renderResult;
@@ -200,9 +208,10 @@ export class Prerenderer {
     // iterate over all elements in the body
     $('body *').each(function (i, el) {
       // get the ssrv of the closest hydrated parent or the own ssrv
-      const parentId = ($(this).parent().closest('.hydrated').attr('ssrv')
-        || $(this).closest('.hydrated').attr('ssrv'));
+      const parentId = ($(this).parent().closest('.hydrated').attr('ssrv'));
+        // || $(this).closest('.hydrated').attr('ssrv'));
       // make sure there a parentId exists
+      debug(el.tagName + ': (type ' + typeof parentId + ') ' + parentId);
       if (parentId) {
         // get the index of the current child in its parent's list of children
         const childIdx = $(this).parent().children().index($(this));

@@ -4,6 +4,9 @@ import * as path from 'path';
 import * as dbg from 'debug';
 import * as queue from 'queue';
 import * as fs from 'fs-extra';
+import * as axios from 'axios';
+import * as puppeteer from 'puppeteer';
+
 
 const debug = dbg('Prerenderer');
 
@@ -41,11 +44,13 @@ export class PrerenderManager {
   private processedQueue: Set<String> = new Set();
   // the prerenderer
   private prerenderer: Prerenderer = new Prerenderer();
+  // the page queue
+  private pageq: any;
   // the queue
   private q: any;
   // the default options for the prerendermanager
   private defaultQueueOptions: PrerenderManagerQueueOptions = {
-    concurrency: 25
+    concurrency: 30
   };
   // the prerenderer host
   private pHost: string = 'http://localhost:' + this.port;
@@ -57,6 +62,11 @@ export class PrerenderManager {
   private errResults: any[] = [];
   // rendered pages counter
   private renderedPages: number = 0;
+
+  private currentPage: number = 1;
+
+  private chromeInstance: puppeteer.Browser;
+
 
   constructor(options?: PrerenderManagerOptions) {
     if(options) {
@@ -101,6 +111,10 @@ export class PrerenderManager {
     this.startServer();
     // listen function for the express server
     this.app.listen(this.port, async () => {
+      const apiData: any = await axios.default.get("https://api.mydriver.com/mydriver-cms/v3/cms/url");
+      const urls: any[] = apiData.data.data.map((entry: any) => entry.url)
+      // testing
+      .slice(0, 200);
       try {
         await fs.remove(this.outputDir);
         await fs.ensureDir(this.outputDir);
@@ -118,8 +132,25 @@ export class PrerenderManager {
       } catch(e) {
         console.log('error while copying files ' + e.message);
       }
-      // initial get of / to get the first url's
-      await this.getPage(this.startUrl);
+       // check if chrome is already available
+       if(!this.chromeInstance) {
+        debug('Init chrome instance');
+        // start the browser
+        this.chromeInstance = await this.prerenderer.startBrowser();
+        debug('Chrome started');
+      }
+      this.pageq = new Array(); // queue(this.defaultQueueOptions);
+      for (let i = 0; i < this.defaultQueueOptions.concurrency; i++) {
+        const page = await this.chromeInstance.newPage();
+        this.prerenderer.windowSet(page, 'isServer', true);
+        this.pageq.push(page);
+      }
+      this.q.splice(0, 0, ...urls.map((url) => {
+        return (() => this.getPage(this.pHost + url));
+      }));
+      // await this.startQueue(this.pageq);
+      // // initial get of / to get the first url's
+      // await this.getPage(this.startUrl);
       // start the queue
       await this.startQueue(this.q);
       try {
@@ -164,23 +195,23 @@ export class PrerenderManager {
     // check if the element
     if(!this.processedQueue.has(url)) {
       try {
-        console.log('Render: ' + url);
+        console.log('Render: #' + this.currentPage++ + ': '  + url);
         // execute the renderer
-        const res = await this.prerenderer.runRender(url);
+        const res = await this.prerenderer.runRender(url, this.pageq);
         // increase the counter
         this.renderedPages++;
         // add the element to the processed queue to ensure that there are no duplicates
         this.processedQueue.add(url);
-        // check if it returns links
-        if(res.links && res.links.length > 0) {
-          for(const link of res.links) {
-            // check if the link has already been processed before adding it to the queue
-            if(!this.processedQueue.has(this.pHost + link)) {
-              // push every link
-              this.q.push(() => this.getPage(this.pHost + link));
-            }
-          }
-        }
+        // // check if it returns links
+        // if(res.links && res.links.length > 0) {
+        //   for(const link of res.links) {
+        //     // check if the link has already been processed before adding it to the queue
+        //     if(!this.processedQueue.has(this.pHost + link)) {
+        //       // push every link
+        //       this.q.push(() => this.getPage(this.pHost + link));
+        //     }
+        //   }
+        // }
         // check if it returns errors
         if(res.errors && res.errors.length > 0) {
           debug('Errors fetched:' + res.url);
